@@ -1,0 +1,38 @@
+# logpulse example configuration
+# Copy this file and adjust values for your environment.
+
+# Path to the log file to tail (env vars and ~ are expanded)
+log_path = "/var/log/myapp/app.log"
+
+# How often (in seconds) to poll the log file for new lines
+poll_interval = 1.0
+
+# --- Patterns -----------------------------------------------------------------
+# Each [[patterns]] block defines one alerting rule.
+
+[[patterns]]
+label      = "critical-error"
+regex      = "CRITICAL|FATAL"
+severity   = "critical"
+case_sensitive = false
+
+[[patterns]]
+label      = "out-of-memory"
+regex      = "OutOfMemoryError|OOM killer"
+severity   = "critical"
+case_sensitive = false
+
+[[patterns]]
+label      = "deprecation-warning"
+regex      = "DeprecationWarning"
+severity   = "warning"
+case_sensitive = true
+
+# --- Notifier -----------------------------------------------------------------
+# Remove or comment-out this section to disable webhook notifications.
+
+[notifier]
+# Slack incoming-webhook URL (or any compatible endpoint).
+# You may use an environment variable: webhook_url = "$SLACK_WEBHOOK_URL"
+webhook_url = "https://hooks.slack.com/services/T000/B000/xxxx"
+timeout     = 10
