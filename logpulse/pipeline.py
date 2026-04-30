@@ -1,76 +1,88 @@
-"""Pipeline that wires together LogTailer, PatternMatcher, and WebhookNotifier."""
-
+"""Pipeline: wires together tailer, matcher, dedup, throttle, and notifier."""
 from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 from typing import Optional
 
-from logpulse.matcher import PatternMatcher
+from logpulse.buffer import BufferConfig, ContextBuffer
+from logpulse.dedup import DedupConfig, LineDeduplicator
+from logpulse.formatter import FormatConfig, format_alert
+from logpulse.matcher import Matcher
 from logpulse.notifier import WebhookNotifier
 from logpulse.tailer import LogTailer
+from logpulse.throttle import AlertThrottle, ThrottleConfig
 
 logger = logging.getLogger(__name__)
 
 
 class Pipeline:
-    """Continuously tail a log file, match patterns, and fire notifications."""
+    """Coordinates all logpulse components into a single processing loop."""
 
     def __init__(
         self,
-        log_path: str | Path,
-        matcher: PatternMatcher,
+        tailer: LogTailer,
+        matcher: Matcher,
         notifier: WebhookNotifier,
+        *,
+        throttle_config: Optional[ThrottleConfig] = None,
+        dedup_config: Optional[DedupConfig] = None,
+        format_config: Optional[FormatConfig] = None,
+        buffer_config: Optional[BufferConfig] = None,
         poll_interval: float = 1.0,
-        source: Optional[str] = None,
     ) -> None:
-        self.log_path = Path(log_path)
-        self.matcher = matcher
-        self.notifier = notifier
-        self.poll_interval = poll_interval
-        self.source = source or str(log_path)
+        self._tailer = tailer
+        self._matcher = matcher
+        self._notifier = notifier
+        self._throttle = AlertThrottle(throttle_config or ThrottleConfig())
+        self._dedup = LineDeduplicator(dedup_config or DedupConfig())
+        self._fmt = format_config or FormatConfig()
+        self._buf = ContextBuffer(buffer_config or BufferConfig())
+        self._poll_interval = poll_interval
         self._running = False
 
     # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def run_once(self) -> int:
-        """Process all currently available new lines. Returns number of alerts fired."""
-        tailer = LogTailer(self.log_path)
-        alerts_fired = 0
-        for line in tailer.lines():
-            alerts = self.matcher.check(line)
+        """Process all currently available new lines. Returns alert count."""
+        alerts_sent = 0
+        new_lines = list(self._tailer.lines())
+
+        for line in new_lines:
+            if self._dedup.is_duplicate(line):
+                logger.debug("Dedup suppressed: %s", line)
+                continue
+
+            alerts = self._matcher.check(line)
             for alert in alerts:
+                ctx_results = self._buf.feed(line, matched=True)
+                if not self._throttle.allow(alert.label):
+                    logger.debug("Throttle suppressed alert: %s", alert.label)
+                    continue
+                context_lines: list[str] = []
+                if ctx_results:
+                    before, _, after = ctx_results[0]
+                    context_lines = before + after
+                message = format_alert(alert, self._fmt, context=context_lines)
                 try:
-                    self.notifier.send(alert, source=self.source)
-                    alerts_fired += 1
-                except Exception as exc:  # noqa: BLE001
-                    logger.error("Failed to send notification: %s", exc)
-        return alerts_fired
+                    self._notifier.send(message, severity=alert.severity)
+                    alerts_sent += 1
+                except Exception:  # noqa: BLE001
+                    logger.exception("Notifier failed for alert %s", alert.label)
+            else:
+                self._buf.feed(line, matched=False)
+
+        return alerts_sent
 
     def run(self) -> None:
-        """Block and continuously tail the log file until stopped."""
+        """Block and poll the log file until stop() is called."""
         self._running = True
-        tailer = LogTailer(self.log_path)
-        logger.info("Pipeline started for %s", self.log_path)
-        try:
-            while self._running:
-                for line in tailer.lines():
-                    alerts = self.matcher.check(line)
-                    for alert in alerts:
-                        try:
-                            self.notifier.send(alert, source=self.source)
-                        except Exception as exc:  # noqa: BLE001
-                            logger.error("Failed to send notification: %s", exc)
-                time.sleep(self.poll_interval)
-        except KeyboardInterrupt:
-            logger.info("Pipeline interrupted by user.")
-        finally:
-            self._running = False
-            logger.info("Pipeline stopped.")
+        logger.info("Pipeline started (poll_interval=%.1fs)", self._poll_interval)
+        while self._running:
+            self.run_once()
+            time.sleep(self._poll_interval)
 
     def stop(self) -> None:
-        """Signal the run loop to exit."""
+        """Signal the run loop to exit after the current iteration."""
         self._running = False
+        self._buf.flush()
+        logger.info("Pipeline stopped")
