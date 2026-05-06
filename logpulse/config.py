@@ -8,11 +8,11 @@ from typing import Any, Dict, List, Optional
 
 try:
     import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore[no-redef]
+except ImportError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore
 
 from logpulse.sampler import SamplerConfig
-from logpulse.redactor import RedactorConfig
+from logpulse.enricher import EnrichConfig
 
 
 @dataclass
@@ -27,7 +27,6 @@ class PatternConfig:
 class NotifierConfig:
     url: str
     timeout: float = 10.0
-    source: Optional[str] = None
 
 
 @dataclass
@@ -37,59 +36,50 @@ class AppConfig:
     notifiers: List[NotifierConfig] = field(default_factory=list)
     checkpoint_path: Optional[str] = None
     poll_interval: float = 1.0
-    redactor: Optional[RedactorConfig] = None
+    enrich: EnrichConfig = field(default_factory=EnrichConfig)
 
 
 def _expand(value: str) -> str:
     return os.path.expandvars(os.path.expanduser(value))
 
 
-def _sampler_from_dict(data: Dict[str, Any]) -> Optional[SamplerConfig]:
-    if "sampler" not in data:
-        return None
-    s = data["sampler"]
+def _sampler_from_dict(data: dict) -> SamplerConfig:
     return SamplerConfig(
-        every_nth=s.get("every_nth"),
-        probability=s.get("probability"),
+        every_nth=data.get("every_nth"),
+        probability=data.get("probability"),
     )
 
 
 def load(path: str | Path) -> AppConfig:
-    """Parse a TOML config file and return an :class:`AppConfig`."""
-    with open(path, "rb") as fh:
-        raw: Dict[str, Any] = tomllib.load(fh)
+    raw = Path(path).read_bytes()
+    data: Dict[str, Any] = tomllib.loads(raw.decode())
 
-    if "log_path" not in raw:
-        raise ValueError("Config must contain 'log_path'")
+    if "log_path" not in data:
+        raise ValueError("[log_path] is required in config")
 
     patterns = [
         PatternConfig(
             label=p["label"],
             regex=p["regex"],
             severity=p.get("severity", "warning"),
-            sampler=_sampler_from_dict(p),
+            sampler=_sampler_from_dict(p["sampler"]) if "sampler" in p else None,
         )
-        for p in raw.get("patterns", [])
+        for p in data.get("patterns", [])
     ]
 
     notifiers = [
-        NotifierConfig(
-            url=n["url"],
-            timeout=n.get("timeout", 10.0),
-            source=n.get("source"),
-        )
-        for n in raw.get("notifiers", [])
+        NotifierConfig(url=_expand(n["url"]), timeout=n.get("timeout", 10.0))
+        for n in data.get("notifiers", [])
     ]
 
-    redactor: Optional[RedactorConfig] = None
-    if "redactor" in raw:
-        redactor = RedactorConfig.from_dict(raw["redactor"])
+    enrich_data = data.get("enrich", {})
+    enrich = EnrichConfig.from_dict(enrich_data)
 
     return AppConfig(
-        log_path=_expand(raw["log_path"]),
+        log_path=_expand(data["log_path"]),
         patterns=patterns,
         notifiers=notifiers,
-        checkpoint_path=raw.get("checkpoint_path"),
-        poll_interval=raw.get("poll_interval", 1.0),
-        redactor=redactor,
+        checkpoint_path=data.get("checkpoint_path"),
+        poll_interval=data.get("poll_interval", 1.0),
+        enrich=enrich,
     )

@@ -1,38 +1,43 @@
 # logpulse example configuration
-# Copy this file and adjust values for your environment.
 
-# Path to the log file to tail (env vars and ~ are expanded)
 log_path = "/var/log/myapp/app.log"
-
-# How often (in seconds) to poll the log file for new lines
 poll_interval = 1.0
+checkpoint_path = "/var/lib/logpulse/checkpoint.json"
 
-# --- Patterns -----------------------------------------------------------------
-# Each [[patterns]] block defines one alerting rule.
+# ── Enrichment ────────────────────────────────────────────────────────────────
+[enrich]
+include_hostname  = true
+include_timestamp = true
+
+[enrich.static_tags]
+env    = "production"
+region = "us-east-1"
+app    = "myapp"
+
+# ── Patterns ──────────────────────────────────────────────────────────────────
+[[patterns]]
+label    = "error"
+regex    = "(?i)error|exception|traceback"
+severity = "critical"
 
 [[patterns]]
-label      = "critical-error"
-regex      = "CRITICAL|FATAL"
-severity   = "critical"
-case_sensitive = false
+label    = "warning"
+regex    = "(?i)warn"
+severity = "warning"
+
+[patterns.sampler]
+every_nth = 5
 
 [[patterns]]
-label      = "out-of-memory"
-regex      = "OutOfMemoryError|OOM killer"
-severity   = "critical"
-case_sensitive = false
+label    = "oom"
+regex    = "Out of memory"
+severity = "critical"
 
-[[patterns]]
-label      = "deprecation-warning"
-regex      = "DeprecationWarning"
-severity   = "warning"
-case_sensitive = true
+# ── Notifiers ─────────────────────────────────────────────────────────────────
+[[notifiers]]
+url     = "${SLACK_WEBHOOK_URL}"
+timeout = 10.0
 
-# --- Notifier -----------------------------------------------------------------
-# Remove or comment-out this section to disable webhook notifications.
-
-[notifier]
-# Slack incoming-webhook URL (or any compatible endpoint).
-# You may use an environment variable: webhook_url = "$SLACK_WEBHOOK_URL"
-webhook_url = "https://hooks.slack.com/services/T000/B000/xxxx"
-timeout     = 10
+[[notifiers]]
+url     = "https://alerting.internal/webhook"
+timeout = 5.0
