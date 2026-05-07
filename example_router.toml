@@ -1,0 +1,48 @@
+# logpulse example — alert router + audit log
+# Route alerts to different notifiers based on label/severity,
+# and keep an append-only audit trail of every dispatched alert.
+
+log_path = "/var/log/app/app.log"
+
+[[patterns]]
+label       = "db_critical"
+pattern     = "FATAL|deadlock|OOM"
+severity    = "critical"
+
+[[patterns]]
+label       = "db_warning"
+pattern     = "slow query|lock wait"
+severity    = "warning"
+
+[[patterns]]
+label       = "web_error"
+pattern     = "5[0-9]{2} Internal"
+severity    = "error"
+
+# ── Notifiers ────────────────────────────────────────────────────────────────
+[notifiers.slack]
+url      = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+label    = "logpulse"
+
+[notifiers.pagerduty]
+url      = "https://events.pagerduty.com/v2/enqueue"
+label    = "logpulse-pd"
+
+# ── Router ───────────────────────────────────────────────────────────────────
+[router]
+default_notifier = "slack"
+
+[[router.rules]]
+notifier      = "pagerduty"
+severity      = "critical"
+
+[[router.rules]]
+notifier      = "pagerduty"
+label_pattern = "^db_"
+severity      = "error"
+
+# ── Audit log ────────────────────────────────────────────────────────────────
+[audit]
+enabled   = true
+path      = "/var/log/logpulse/audit.jsonl"
+max_bytes = 52428800   # 50 MiB
