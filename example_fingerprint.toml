@@ -1,0 +1,25 @@
+# logpulse – fingerprint configuration example
+# Add this section to your main logpulse config to control line fingerprinting.
+
+[fingerprint]
+# Set to false to skip fingerprinting entirely (alerts will have no digest field)
+enabled = true
+
+# Number of hex characters used for the short digest shown in alerts
+hash_length = 8
+
+# Optional extra masking rules applied BEFORE the built-in defaults.
+# Each rule replaces matches of `pattern` with `placeholder`.
+# Useful for application-specific tokens (order IDs, session keys, etc.)
+extra_masks = [
+  { pattern = "order-\\d+",          placeholder = "<ORDER>"  },
+  { pattern = "sess_[A-Za-z0-9]+",   placeholder = "<SESSION>" },
+  { pattern = "txn:[0-9a-f]{16}",    placeholder = "<TXN>"    },
+]
+
+# Built-in masks (always active, applied after extra_masks):
+#   UUID      →  <UUID>
+#   IPv4      →  <IP>
+#   ISO-8601 timestamp  →  <TS>
+#   Hex literals (6+ chars)  →  <HEX>
+#   Bare integers  →  <NUM>
