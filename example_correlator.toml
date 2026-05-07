@@ -1,0 +1,34 @@
+# logpulse — alert correlator example
+# Demonstrates grouping related alerts that fire within a time window.
+
+log_path = "/var/log/app/app.log"
+checkpoint_file = "/tmp/logpulse_correlator.json"
+poll_interval = 1.0
+
+[[patterns]]
+label       = "db_error"
+regex       = "(database|connection pool|deadlock)"
+severity    = "critical"
+
+[[patterns]]
+label       = "db_error"
+regex       = "timeout waiting for connection"
+severity    = "critical"
+
+[[patterns]]
+label       = "auth_failure"
+regex       = "(authentication failed|invalid token|unauthorized)"
+severity    = "warning"
+
+[notifier]
+url      = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+timeout  = 5
+
+# Correlator groups alerts sharing the same label (or severity) that arrive
+# within `window_seconds`.  Only groups with at least `min_group_size` alerts
+# are forwarded to the notifier — lone alerts are silently dropped.
+[correlator]
+enabled        = true
+window_seconds = 30.0
+min_group_size = 2
+group_by       = "label"   # or "severity"
