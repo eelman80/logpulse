@@ -1,0 +1,39 @@
+# logpulse example: multi-line log folding
+# Useful for Java stack traces, Python tracebacks, or any log format
+# where a single logical event spans multiple physical lines.
+
+log_path = "/var/log/myapp/app.log"
+poll_interval = 0.5
+
+# Multi-line folding configuration
+[multiline]
+enabled = true
+
+# A new record starts when the line begins with a non-whitespace character
+# (the default). For timestamped logs you might use:
+#   start_pattern = "^\\d{4}-\\d{2}-\\d{2}"
+start_pattern = "^\\S"
+
+# Lines beginning with whitespace are treated as continuations
+continuation_pattern = "^\\s+"
+
+# Hard cap: flush the buffer after this many lines regardless
+max_lines = 50
+
+# Safety valve: flush if this many non-continuation lines pass without
+# a new start being detected (guards against runaway buffers)
+flush_timeout_lines = 100
+
+# Patterns are evaluated against the *folded* multi-line record
+[[patterns]]
+label = "java_exception"
+pattern = "Exception|Error"
+severity = "error"
+
+[[patterns]]
+label = "traceback"
+pattern = "Traceback \\(most recent call last\\)"
+severity = "error"
+
+[[notifiers]]
+url = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"

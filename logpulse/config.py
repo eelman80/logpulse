@@ -1,4 +1,4 @@
-"""Configuration dataclasses and TOML loader for logpulse."""
+"""Configuration loading for logpulse."""
 from __future__ import annotations
 
 import os
@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover
     import tomli as tomllib  # type: ignore
 
 from logpulse.sampler import SamplerConfig
-from logpulse.suppressor import SuppressorConfig
+from logpulse.multiline import MultilineConfig
 
 
 @dataclass
@@ -27,7 +27,7 @@ class PatternConfig:
 class NotifierConfig:
     url: str
     timeout: float = 10.0
-    source: Optional[str] = None
+    headers: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -37,36 +37,34 @@ class AppConfig:
     notifiers: List[NotifierConfig] = field(default_factory=list)
     poll_interval: float = 1.0
     checkpoint_path: Optional[str] = None
-    suppressor: SuppressorConfig = field(default_factory=SuppressorConfig)
+    multiline: MultilineConfig = field(default_factory=MultilineConfig)
 
 
 def _expand(value: str) -> str:
     return os.path.expandvars(os.path.expanduser(value))
 
 
-def _sampler_from_dict(data: Dict[str, Any]) -> Optional[SamplerConfig]:
-    if "sampler" not in data:
-        return None
-    s = data["sampler"]
+def _sampler_from_dict(data: dict) -> SamplerConfig:
+    from logpulse.sampler import SamplerConfig
     return SamplerConfig(
-        every_nth=s.get("every_nth"),
-        probability=s.get("probability"),
+        every_nth=data.get("every_nth"),
+        probability=data.get("probability"),
     )
 
 
-def load(path: str) -> AppConfig:
+def load_config(path: str) -> AppConfig:
     raw = Path(path).read_bytes()
-    data = tomllib.loads(raw.decode())
+    data: Dict[str, Any] = tomllib.loads(raw.decode())
 
     if "log_path" not in data:
-        raise ValueError("Config missing required key: log_path")
+        raise ValueError("Config must specify 'log_path'")
 
     patterns = [
         PatternConfig(
             label=p["label"],
             pattern=p["pattern"],
             severity=p.get("severity", "warning"),
-            sampler=_sampler_from_dict(p),
+            sampler=_sampler_from_dict(p["sampler"]) if "sampler" in p else None,
         )
         for p in data.get("patterns", [])
     ]
@@ -74,19 +72,20 @@ def load(path: str) -> AppConfig:
     notifiers = [
         NotifierConfig(
             url=_expand(n["url"]),
-            timeout=n.get("timeout", 10.0),
-            source=n.get("source"),
+            timeout=float(n.get("timeout", 10.0)),
+            headers=n.get("headers", {}),
         )
         for n in data.get("notifiers", [])
     ]
 
-    suppressor = SuppressorConfig.from_dict(data.get("suppressor", {}))
+    multiline_data = data.get("multiline", {})
+    multiline_cfg = MultilineConfig.from_dict(multiline_data)
 
     return AppConfig(
         log_path=_expand(data["log_path"]),
         patterns=patterns,
         notifiers=notifiers,
-        poll_interval=data.get("poll_interval", 1.0),
+        poll_interval=float(data.get("poll_interval", 1.0)),
         checkpoint_path=data.get("checkpoint_path"),
-        suppressor=suppressor,
+        multiline=multiline_cfg,
     )
