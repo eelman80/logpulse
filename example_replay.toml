@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# logpulse — offline replay configuration example
+# ---------------------------------------------------------------------------
+# Use this section to replay a historical log file through the full pipeline
+# without tailing a live file.  Useful for testing alert rules and notifiers.
+
+[replay]
+# Path to the historical log file to replay.
+path = "/var/log/app/archive-2024-01-15.log"
+
+# Playback speed multiplier.
+#   1.0 = simulate original 1 ms inter-line delay
+#   0   = as fast as possible (useful for CI)
+#  10.0 = 10× faster than real-time
+speed = 0
+
+# Stop after this many lines (omit or set to 0 for no limit).
+# max_lines = 5000
+
+# Skip the first N lines of the file (0-based).
+start_line = 0
+
+# Loop back to the beginning when EOF is reached.
+loop = false
+
+# ---------------------------------------------------------------------------
+# Standard pattern / notifier config still applies during replay.
+# ---------------------------------------------------------------------------
+
+[notifier]
+url = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+label = "replay-test"
+
+[[patterns]]
+label       = "error"
+regex       = "ERROR"
+severity    = "high"
+description = "Error detected during replay"
