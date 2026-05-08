@@ -1,0 +1,43 @@
+# logpulse — dynamic line labeler example
+# Attach key/value labels to log lines based on regex captures.
+# Labels are merged into alert metadata for richer notifications.
+
+log_path = "/var/log/app/server.log"
+
+[notifier]
+url = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+label = "prod-server"
+
+[[patterns]]
+label     = "error-alert"
+regex     = "ERROR"
+severity  = "critical"
+
+[[patterns]]
+label     = "warn-alert"
+regex     = "WARN"
+severity  = "warning"
+
+# ---------------------------------------------------------------------------
+# [labeler] — optional section; omit to disable dynamic labeling entirely
+# ---------------------------------------------------------------------------
+[labeler]
+enabled = true
+
+# Each rule has a mandatory "name" and "pattern" key.
+# Any additional keys are treated as static labels attached when the rule fires.
+# Named capture groups in "pattern" are also extracted as labels.
+
+[[labeler.rules]]
+name    = "severity"
+pattern = "(?P<level>ERROR|WARN|INFO|DEBUG)"
+service = "backend"
+
+[[labeler.rules]]
+name    = "request_id"
+pattern = "req_id=(?P<request_id>[\\w-]+)"
+
+[[labeler.rules]]
+name    = "http_status"
+pattern = "HTTP/\\S+ (?P<status_code>\\d{3})"
+environment = "production"
