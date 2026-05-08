@@ -73,3 +73,11 @@ class LineSampler:
     def seen(self, label: str) -> int:
         """Return how many times *label* has been presented so far."""
         return self._counters.get(self._counter_key(label), 0)
+
+    def stats(self) -> dict[str, int]:
+        """Return a snapshot of all current counters keyed by their counter key.
+
+        Useful for diagnostics and testing — shows how many times each label
+        (or the global counter when ``per_label=False``) has been presented.
+        """
+        return dict(self._counters)
