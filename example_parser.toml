@@ -1,0 +1,30 @@
+# logpulse — structured log parser example
+# Run: logpulse --config example_parser.toml
+
+log_path = "/var/log/nginx/access.log"
+poll_interval = 1.0
+
+[[patterns]]
+label      = "server_error"
+regex      = " 5\\d\\d "
+severity   = "error"
+
+[[patterns]]
+label      = "slow_request"
+regex      = "request_time=(?P<rt>[5-9]\\d{3}|[1-9]\\d{4,})"
+severity   = "warning"
+
+[parser]
+enabled = true
+
+  [[parser.rules]]
+  name    = "nginx_combined"
+  pattern = '(?P<ip>\S+) \S+ \S+ \[(?P<ts>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) \S+" (?P<status>\d+) (?P<bytes>\d+)'
+
+  [[parser.rules]]
+  name    = "nginx_error"
+  pattern = '(?P<year>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] (?P<msg>.+)'
+
+[notifier]
+url      = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+timeout  = 5
