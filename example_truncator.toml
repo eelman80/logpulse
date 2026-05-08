@@ -1,0 +1,29 @@
+# logpulse example: line truncation
+# Lines exceeding max_length are clipped before matching and alerting.
+
+log_path = "/var/log/app/app.log"
+checkpoint_file = "/tmp/logpulse_truncator.json"
+poll_interval = 1.0
+
+[truncator]
+enabled = true
+# Maximum number of characters (or bytes if count_bytes = true) to keep.
+max_length = 2048
+# String appended to truncated lines so you know they were clipped.
+ellipsis = "...[truncated]"
+# Set to true to measure length in UTF-8 bytes instead of Unicode characters.
+# Useful when downstream systems have byte-level limits (e.g. syslog 1024 B).
+count_bytes = false
+
+[[patterns]]
+label = "error"
+regex = "ERROR"
+severity = "high"
+
+[[patterns]]
+label = "warn"
+regex = "WARN"
+severity = "low"
+
+[notifier]
+url = "https://hooks.slack.com/services/XXXX/YYYY/ZZZZ"
