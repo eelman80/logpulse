@@ -1,0 +1,31 @@
+# example_debouncer.toml — demonstrate alert debouncing
+#
+# The debouncer suppresses rapid repeated alerts for the same label and
+# emits a single representative alert only after the signal goes quiet
+# (quiet_seconds) or the maximum hold time (max_hold_seconds) is reached.
+
+log_path = "/var/log/app/app.log"
+
+[[patterns]]
+label       = "db_error"
+regex       = "database connection (refused|timeout)"
+severity    = "critical"
+
+[[patterns]]
+label       = "high_latency"
+regex       = "response time exceeded [0-9]+ms"
+severity    = "warning"
+
+[debounce]
+enabled          = true
+# Emit the alert only after the stream has been quiet for this many seconds.
+quiet_seconds    = 5.0
+# Never hold an alert longer than this, even if events keep arriving.
+max_hold_seconds = 30.0
+
+[notifier]
+url      = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+label    = "logpulse"
+
+[checkpoint]
+path = "/var/lib/logpulse/debouncer_example.json"
